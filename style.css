@@ -1,36 +1,36 @@
-
 body, html {
-  margin: 0; padding: 0; height: 100%;
+  margin: 0;
+  padding: 0;
+  height: 100%;
   font-family: Arial, sans-serif;
-  background: #121212;
-  color: #eee;
+  background: #111;
+  color: #fff;
 }
 
 .center-screen {
   position: fixed;
-  top: 50%; left: 50%;
+  top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 5rem;
+  font-size: 4rem;
+  text-align: center;
   user-select: none;
-}
-
-#status {
-  font-size: 1.5rem;
 }
 
 #reloadBtn {
   position: fixed;
-  top: 60%; left: 50%;
+  top: 65%;
+  left: 50%;
   transform: translateX(-50%);
   padding: 1em 2em;
   font-size: 1.2rem;
   cursor: pointer;
-  background-color: #bb2222;
+  background-color: #cc3333;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   color: white;
-  user-select: none;
+  display: none;
 }
 #reloadBtn:hover {
-  background-color: #dd4444;
+  background-color: #e64444;
 }
