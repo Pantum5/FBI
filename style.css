@@ -1,35 +1,36 @@
+/* Чёрный фон и выравнивание по центру */
 body, html {
-  margin: 0; padding: 0; height: 100%;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
   font-family: Arial, sans-serif;
-  background: #121212;
-  color: #eee;
 }
 
-.center-screen {
-  position: fixed;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 5rem;
-  user-select: none;
-}
-
-#status {
-  font-size: 1.5rem;
-}
-
-#reloadBtn {
-  position: fixed;
-  top: 60%; left: 50%;
-  transform: translateX(-50%);
-  padding: 1em 2em;
-  font-size: 1.2rem;
-  cursor: pointer;
-  background-color: #bb2222;
-  border: none;
-  border-radius: 6px;
+/* Текст загрузки */
+.loader-text {
   color: white;
-  user-select: none;
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+  text-align: center;
 }
-#reloadBtn:hover {
-  background-color: #dd4444;
+
+/* Крутящийся индикатор */
+.loader {
+  border: 8px solid #333;
+  border-top: 8px solid #ffffff;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: spin 1s linear infinite;
+}
+
+/* Анимация вращения */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
