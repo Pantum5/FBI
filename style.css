@@ -1,5 +1,4 @@
-/* Чёрный фон и выравнивание по центру */
-body, html {
+html, body {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -9,27 +8,23 @@ body, html {
   align-items: center;
   flex-direction: column;
   font-family: Arial, sans-serif;
+  color: #fff;
 }
 
-/* Текст загрузки */
 .loader-text {
-  color: white;
   font-size: 2.5rem;
   margin-bottom: 20px;
-  text-align: center;
 }
 
-/* Крутящийся индикатор */
 .loader {
   border: 8px solid #333;
-  border-top: 8px solid #ffffff;
+  border-top: 8px solid #fff;
   border-radius: 50%;
   width: 60px;
   height: 60px;
   animation: spin 1s linear infinite;
 }
 
-/* Анимация вращения */
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
